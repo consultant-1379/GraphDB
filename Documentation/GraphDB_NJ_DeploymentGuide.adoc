@@ -1,0 +1,499 @@
+= Graph Database NJ Service - Deployment Guide
+:author: Niamh Shiel
+:doc-name: Graph Database NJ - Deployment Guide
+:doc-no: 1/1531-CAV 101 090/1
+:revnumber:
+:revdate: {sys: date +%Y-%m-%d}
+:approved-by-name:
+:approved-by-department: BDGS
+
+
+== Introduction
+
+This document will describe how to deploy the **Graph Database NJ** Service in a Kubernetes environment.
+
+=== Function Overview
+
+The **Graph Database NJ** containers running on Kubernetes can be deployed using a Helm chart.
+Relevant configuration options are exposed through the `values.yaml` file.
+
+The main configurable entities in this deployment are:
+
+* **Graph Database NJ** Core Causal Cluster
++
+Due to ordering and persistency requirements, the **Graph Database NJ** causal cluster installation
+is deployed in Kubernetes as a `StatefulSet` along with a number of stateless read replicas.
+
+* **Graph Database NJ** Service
++
+The **Graph Database NJ** service discovers scalable sets of **Graph Database NJ** containers and
+load-balances traffic across these containers.
+
+Initalization functions, for example during initial install, can be supplied externally through
+the `values.yaml` file, *init containers*, or *Helm hooks*.
+
+In addition to this, Prometheus integration <<ref_1,[1]>> can be deployed as *sidecar* containers.
+
+=== Deployment Overview
+
+==== Prerequisites
+
+* A running Kubernetes environment
+
+* Some knowledge of the Kubernetes environment, including networking details
+
+* Access rights to deploy and manage workloads
+
+* Availability of the `kubectl` CLI tool with correct
+authentication details. Contact the Kubernetes System Admin if needed
+
+* Availability of the `helm` package
+
+* It is recommended to have the same version for both the client and the server (tiller)
+
+* Availability of Helm charts and Docker images for the service and all dependent services
+
+* It is recommended to configure Kubernetes context and namespaces for better isolation of workloads,
+  particularly during development.
+
+* Backup and Restore Orchestrator service must be deployed if backup and restore feature is enabled.
+
+
+
+== Deployment in a Kubernetes Environment Using Helm
+
+This section describes how to deploy the service in Kubernetes using Helm and the `kubectl` CLI client.
+Helm is a package manager for Kubernetes that streamlines the installation and management of Kubernetes applications.
+
+=== Preparation
+
+==== Ensure Helm Chart and Docker Image Access - Applicable to Internal Users
+Internal users can install the helm chart directly by choosing the latest snapshot and release charts from their respective helm repositories:
+
+===== Snapshot Helm Repository
+
+----
+export ARM="https://arm.epk.ericsson.se/artifactory"
+helm repo add graph-db-snapshot ${ARM}/proj-adp-oss-graph-database-nj-helm
+helm repo update
+helm repo list
+helm search graph-db-snapshot -l
+----
+
+
+===== Releases Helm Repository
+
+----
+export ARM="https://arm.epk.ericsson.se/artifactory"
+helm repo add graph-db-snapshot ${ARM}/proj-adp-oss-graph-database-nj-release-helm
+helm repo update
+helm repo list
+helm search graph-db-release -l
+----
+
+
+==== Ensure Helm Chart and Docker Image Access - Applicable to External Users
+
+The following steps are just for reference. Technically, the best solution would be provisioning of a private Helm repository along with a Docker registry.
+
+In the abscence of those, Software Gateway (SWGW) shall be used.
+
+
+*Steps*
+
+1.  Download and rename the following files from the SW Gateway:
+* Helm chart: Rename file `19011-CXC2012221_1_X_<Revision>_TAR_GZIPV1.tar.gz` to
+`eric-data-graph-database-nj -<Version>.tgz`.
++
+*Note:* The `<Version>` of the helm chart is formulated as follows: `<Major Release>.<Minor Release>.<Patch>+<Build>`. For example, for the fourth build of the **Graph Database NJ** 9.99.9 PRA release, the helm chart file name is
+`eric-data-graph-database-nj -9.99.9+4.tgz`. For every minor release, there is a new `<Revision>`, which is an incrementally increased letter of the alphabet.
++
+The Helm chart can either be used locally or pushed to a repository.
+* Docker images: Rename files `19011-CXC2012219_1_X_<Revision>_TAR_GZIPV1.tar.gz` to
+`19011-CXC2012219_1_X_<Revision>.zip` and `19010-CXC2012016_1_X_<Revision>_TAR_GZIPV1.tar.gz` to `19010-CXC2012016_1_X_<Revision>.zip`
+
+2.  Unzip the 2 files `19010-CXC2012219_1_X_<Revision>.zip` and `19010-CXC2012016_1_X_<Revision>.zip` to get the docker image tar files
+`eric-data-graph-database-nj -<Version>-CXC-201-2219-1.tar` and load
+the tar files with the command:
++
+----
+docker load --input eric-data-graph-database-nj -<Version>-CXC-201-2219-1.tar
+----
+3.  Tag the loaded docker image.
++
+----
+docker tag armdocker.rnd.ericsson.se/proj-eric-data-graph-database-nj /data/eric-data-graph-database-nj :<Version> <Repository>/eric-data-graph-database-nj :<Version>
+----
+4. Push the image to a local (private) docker registry. Replace the `<Repository>` and `<Version>` variables with values.
++
+----
+docker push <Repository>/eric-data-graph-database-nj :<Version>
+----
++
+*NOTE*: When deploying this in production, it is essential that private Helm repos and
+docker registry have been set up. Otherwise the deployment will fail when trying to
+pull docker images, as specified in the GraphDB Helm chart.
+
+=== Pre-Deployment Checks - Applicable to All Users
+
+Ensure the following:
+
+* The <RELEASE_NAME> is not used already in the corresponding cluster.
+Use `helm list` command to list the existing deployments (and delete previous
+deployment with the corresponding <RELEASE_NAME> if needed).
+
+* The same namespace is used for all deployments.
+
+
+=== Helm Chart Installations of Dependent Services
+
+N/A
+
+=== Helm Chart Installation of the Graph Database NJ Service
+
+In the following example, you create a Helm deployment, and verify
+that the deployment is successful.
+
+Users can override the default values provided in the `values.yaml` template of the
+helm chart, or by supplying an external values file. The recommended parameters to override
+are listed in the following section: <<configParams,Configuration Parameters>>.
+
+For these steps we assume that Kubernetes namespace and context have been properly
+configured, according to your environment.
+
+==== Deploy the Graph Database NJ Service
+
+1. Add **Graph Database NJ** chart to your helm repositories as described above.
+
+2.  (Optional) Before installing the charts, inspect the helm charts
+using the `--dry-run --debug` option. This option helps you to
+identify the Kubernetes YAML files that the helm charts contain as well
+as the values that are injected into the files:
++
+----
+helm install <CHART_REFERENCE> --name <RELEASE_NAME> --debug --dry-run
+----
++
+The variables specified in the command are as follows:
++
+- `<CHART_REFERENCE>`: A path to a packaged chart, to an unpacked chart directory or a URL.
+- `<RELEASE_NAME>`: String value, a name to identify and manage your helm chart.
+- `<NAMESPACE>`: String value, a name to be used dedicated by the user for deploying own helm charts.
++
+In the example below, we show how to do a dry run and install the snapshot version of the chart:
++
+----
+# Dry run.
+helm install graph-db-snapshot/eric-data-graph-database-nj --version <VERSION> --name graphdb-nj --debug --dry-run
+
+# Actual install.
+helm install graph-db-snapshot/eric-data-graph-database-nj --version <VERSION> --name graphdb-nj
+----
+
+3.  After performing a full installation, verify that all pods are successfully deployed.
++
+----
+kubectl get all
+----
+
+==== Verify the Availability of the Graph Database NJ Service
+
+1. Login to a **Graph Database NJ** pod to communicate with the **Graph Database NJ** as shown.
++
+----
+# List all pods and pick one, for example the first one.
+kubectl get pods
+
+# Run a CYPHER query in the first pod through the built-in CYPHER shell.
+kubectl exec pod/eric-data-graph-database-nj-0 -- bin/cypher-shell -u neo4j -p demo --format verbose "call dbms.components()"
+----
++
+
+2. Other relevant verifications (if required).
+
+Use port forwarding to check if the built-in Neo4J dashboard UI can be accessed. Use a Neo4J client to connect to the Neo4J and run queries.
+
+
+[[configParams]]
+== Graph Database NJ Service Configuration Parameters
+
+
+The **Graph Database NJ** Service uses a configuration interface based on environment
+variables that are defined in the helm chart. You can set these variables
+during the deployment of the helm chart (using the --set argument). Parameters
+mandatory to set at deployment time are separately listed below as well as the
+optional parameters.
+
+
+== Accessing and Using Graph Database NJ
+
+=== Port Forwarding
+One way to see and test the running Graph Database NJ instance is to access it from your local machine. Once the chart has been installed and all pods and services are up and running, you can use port-forwarding to easily access the database instance. You can do this by running the following command and pointing a web browser to http://localhost:7474/ in order to access the Neo4J UI:
+
+----
+# List all pods.
+kubectl get pods
+
+# Pick one of the pods, for example the first one and forward the ports.
+kubectl port-forward pod/eric-data-graph-database-nj-0 7474:7474 7687:7687
+----
+
+Through this UI you can create entities within the database, such as nodes and edges. These entities can be connected and configured however the user wants. However, it is important to keep in mind that node labels, edge types, and properties are case sensitive, meaning that the property “name” is different from the property “Name”.
+
+It is recommended to follow the naming conventions in the below table:
+
+[width="80%", cols="1,2,1",options="header"]
+|===
+| Graph Entity | Recommended Style | Example
+|Node label |Camel case, beginning with an upper-case character | :AnExample
+|Edge type |Upper-case, using underscore to separate words | :AN_EXAMPLE
+|Property |Camel case, beginning with a lower-case character | anExample
+|===
+
+=== Ingress
+Another way to access the Graph Database NJ instance is to create an ingress and deploy it alongside the service. Ingresses manage external access to cluster services.
+
+==== Prerequisites
+You must have an Ingress controller to satisfy an Ingress. Only creating an Ingress resource has no effect.
+An `nginx` Ingress controller is deployed on clusters as part of the ADP ECCD components.
+
+==== Using the convienience Ingress for testing
+
+This chart comes with two convienence Ingress configurations for testing,
+development and evaluation purposes. These expose the Neo4j browser and Bolt
+protocol on the default LoadBalancer of the CCD Cluster they are deployed on.
+To enable these, edit `values.yaml` and change the `exposeBrowser` and/or `exposeBolt`
+to true. After changing these settings upgrade the helm chart to apply the
+changes.
+
+For security and other reasons it is not reccomended that these settings are used in production, but they are
+provided as a convienience.
+
+The ingress yaml files can be found in the templates directory of the GraphDB
+Helm chart respository. The filenames are:
+
+.Bulleted
+ * neo4j-ingress-bolt-svc.yaml
+ * neo4j-ingress-bolt.yaml
+ * neo4j-ingress-browser-svc.yaml
+ * neo4j-ingress-browser.yaml
+
+== Graph Database NJ Service Scaling
+
+After you deploy the **Graph Database NJ** Helm chart, you can increase or decrease the number of replicas (`StatefulSet` pods or cores and `Stateless` read replica pods). It can take a few minutes for Kubernetes to deploy the new set of pods and to start them running.
+
+=== Prerequisites
+
+If you are increasing or decreasing the number of replicas, read the section on Decommissioning before completing Scaling.
+
+
+*Steps*
+
+
+1. Check how many replicas exist using the following command.
++
+----
+kubectl get all
+----
++
+The relevant output may look similar to below:
++
+----
+NAME                                                      READY   STATUS    RESTARTS   AGE
+pod/eric-data-graph-database-nj-0                         2/2     Running   0          33m
+pod/eric-data-graph-database-nj-1                         2/2     Running   0          33m
+pod/eric-data-graph-database-nj-2                         2/2     Running   0          32m
+pod/eric-data-graph-database-nj-replica-dcbbc7c69-hfjhb   2/2     Running   0          33m
+pod/eric-data-graph-database-nj-replica-dcbbc7c69-v92fn   2/2     Running   1          33m
+
+
+NAME                                  TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)                      AGE
+service/eric-data-graph-database-nj   ClusterIP   None         <none>        7474/TCP,7687/TCP,6362/TCP   33m
+
+NAME                                                  READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/eric-data-graph-database-nj-replica   2/2     2            2           33m
+
+NAME                                                            DESIRED   CURRENT   READY   AGE
+replicaset.apps/eric-data-graph-database-nj-replica-dcbbc7c69   2         2         2       33m
+
+NAME                                           READY   AGE
+statefulset.apps/eric-data-graph-database-nj   3/3     33m
+----
+
+2. Identify the name of the helm chart to be scaled.
++
+----
+# List the chart using the release name specified upon deployment time.
+helm list graphdb-nj
+----
+
+3. Identify the repository in which the helm chart is stored.
++
+----
+helm repo list
+----
+
+4. Increase or decrease the number of cores using the `helm upgrade` command.
++
+----
+# Use the repo name and version from the previous command. Below is just an example.
+helm upgrade graphdb-nj graph-db-snapshot/eric-data-graph-database-nj --version <VERSION>  --set core.numberOfServers=4
+----
++
+Read replicas (pods) can be scaled, i.e. increased or decreased, in a similar fashion:
++
+----
+helm upgrade graphdb-nj graph-db-snapshot/eric-data-graph-database-nj --version <VERSION> -set readReplica.numberOfServers=3
+----
+
+5. Verify that the replicas are ready and running, and view their properties by running the `kubectl get all` command. Also run the `helm list <RELEASE_NAME>` to find out release revision.
++
+----
+kubectl get all
+----
+
+6. Rollback to previous version i.e. REVISION 1
++
+----
+helm rollback <RELEASE_NAME> 1
+----
+
+7. Decommissioning
++
+----
+# Delete all resources and containers for this deployment.
+helm delete graphdb-nj
+
+# Verify, that everything is gone. The below should yield no results.
+kubectl get all
+----
+
+
+== Backup and Restore
+
+The Backup and Restore function is managed by Backup and Restore Orchestrator (BRO) Service. It can be triggered through the REST API provided by Backup and Restore Orchestrator.
+
+For details about how to deploy Backup and Restore Orchestrator, refer to the latest Deployment Guide of Backup and Restore Orchestrator, (see <<DeploymentGuide,Backup and Restore Deployment Guide>>).
+
+Graph Database NJ is bundled with a backup agent that can be enabled when deploying Graph Database NJ.
+The backup agent (brAgent) runs in a seperate deployment pod and has a Neo4J read replica that continuously syncs from the Neo4j core servers.
+When a backup is triggered using BRO, the read replica is stopped and a consistency check is performed before uploading the backup to BRO. After the backup has been completed, the read replica is restarted.
+
+For Restore or rollback, any existing Graph Database NJ helm charts must first be uninstalled and all Neo4j Persistent Volume Claims (PVCs) deleted. The Graph Database NJ helm charts are then reinstalled using a flag that will put the Neo4j core servers in restore mode.
+Once the brAgent has registered to BRO, the restore or rollback can be executed.
+
+The following parameters for BUR are mandatory at deployment time.
+
+[cols="4*",options="header"]
+|===
+| Name | Description | Default | Example
+| brAgent.broServiceName | The name of the ADP Backup and Restore Orchestrator service | - | values file: eric-ctrl-bro
+| brAgent.enabled | Enable or disable the brAgent | false | values file: false
+| brAgent.scopes | The backup scopes that the brAgent is registered to | DEFAULT | values file: DEFAULT
+|===
+
+=== Restore
+Users must follow this section if Graph Database NJ is being deployed to restore a backup.
+
+The following steps involve the installation of GraphDB and resetting of the restore state in the `backup-restore-configmap` configMap once restore has completed.
+
+Note: If the GraphDB is deployed as part of an integration chart, it will be responsibility of the integration chart to handle `backup-restore-configmap` configMap's lifecycle. This can be done by overriding the `brAgent.restorePropertyPath` property in the Values file. 
+
+The configMap uses the following value file parameters:
+
+* `brAgent.restore.configMap.restoreStateKey` - the name of the key in the configMap which contains the restore state.
+
+* `brAgent.restore.state` - the restore state to be used when creating the configMap.
+
+An example from the values file:
+
+----
+brAgent:
+  enabled: false
+  restorePropertyPath: ""
+  restore:
+    configMap:
+      name: backup-restore-configmap
+      restoreStateKey: RESTORE_STATE
+    state: ""
+      ..
+      ..
+  broServiceName: eric-ctrl-bro
+  scopes: "DEFAULT"
+  replicaStartTimeoutMins: 60
+  ..
+  ..
+
+----  
+==== Restore Steps
+
+1. Deploy GraphDB NJ service in restore mode:
+
+   $ helm install graph-db-snapshot/eric-data-graph-database-nj --version <VERSION> --name graphdb-nj --set brAgent.restore.state="ongoing"
+
+2. Trigger the restore from BRO. For the details about how to perform Backup and Restore operations, refer to the latest Operation Guide of Backup and Restore Orchestrator, (see <<Overview,Backup and Restore Orchestrator Service Overview>>).
+
+3. Upon successful restore, reset the restore state in `backup-restore-configmap` configMap by executing the following command:
+
+   $ kubectl patch configmap backup-restore-configmap --type merge -p {"data":{"RESTORE_STATE":""}}
+
+
+== Security Guidelines
+
+* The ADP SIP-TLS service is not currently supported.
+
+
+=== Hardening
+
+TBD
+
+(to be verified) The service is by default pre-hardened. No additional hardening is required. The following pre-hardening actions have been made:
+
+* The service is built on a minimalistic container image with small footprint. Only the required libraries are included.
+
+* The service utilizes an operating system (Common Base OS) with the latest security patches applied.
+
+* The container goes through vulnerability scanning.
+
+* The service is configured to the strict minimum of services and ports to minimize the attack surface.
+
+
+
+=== Security User Guidelines
+
+==== Operative Tasks
+
+This service does not include any operative tasks.
+
+==== External Ports
+
+These ports can be exposed externally using the external_access.enabled parameter explained
+in the Optional Configuration Parameters section above.
+
+[cols="6*",options="header"]
+|===
+| Service or Interface Name | Protocol | IP Address Type | Port | Transport Protocol | IP Version
+|===
+
+==== Internal Ports
+
+The following ports are exposed internally as part of the **Graph Database NJ** Service:
+
+[cols="6*",options="header"]
+|===
+| Service or Interface Name | Protocol | IP Address Type | Port | Transport Protocol | IP Version
+|===
+
+=== Privacy User Guidelines
+
+The **Graph Database NJ** Service is coherent with privacy guidelines, no further action is required.
+
+
+[bibliography]
+References
+----------
+
+[bibliography]
+- [[ref_1]] Prometheus and JMX integration repo https://gerrit.ericsson.se/plugins/gitiles/AIA/microservices/prometheus-jmx/+/refs/heads/master
+- [[DeploymentGuide]] Backup and Restore Deployment Guide, 1/1531-APR 201 40/2
+- [[Overview]] Backup and Restore Orchestrator Service Overview, 1/1551-APR 201 40/2

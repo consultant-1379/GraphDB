@@ -1,0 +1,76 @@
+= Graph Database NJ Troubleshooting Guide
+:author: Brian Creagh
+:doc-name: Graph Database NJ Service Troubleshooting Guide
+:doc-no: 
+:revnumber: 
+:revdate: {sys: date +%Y-%m-%d}
+:approved-by-name: 
+:approved-by-department: BDGS
+
+== Introduction
+
+This guide is designed to help engineers troubleshoot the **Graph Database NJ** service and write Trouble Reports (TRs). The guide
+provides the following information:
+
+* Simple verification and possible recovery.
+
+* The required information when writing a TR or a support case, including
+  all files and system logs that are needed.
+
+* How to retrieve the above information from the system.
+
+== Prerequisites
+
+* Kubernetes: `kubectl` CLI tool properly configured.
+
+* Helm: properly configured using the init command.
+
+[[Troubleshooting]]
+== Troubleshooting
+
+This section describes the troubleshooting functions and procedures for the
+**Graph Database NJ** service:
+
+* There are currently no known issues for **Graph Database NJ**
+
+[[DataColl]]
+== Data Collection
+
+* The logs are collected from each pod using this command:
+
+    kubectl logs <pod name> --namespace=<pod's namespace> >
+
+* The detailed information about the pod are collected using command:
+
+    kubectl describe pod <pod name> --namespace=<pod's namespace>
+    kubectl exec <pod-name> --namespace=<pod's namespace> env
+
+== Trouble Reports and Additional Support
+
+Issues can be handled in different ways, as listed below:
+
+* For questions, support or hot requesting, see xref:chAdditional_Support[].
+* For reporting of faults, see xref:chTrouble_Reports[].
+
+[[chAdditional_Support]]
+=== Additional Support
+
+If you require additional support, you can contact the **Graph Database NJ** Product Owner. You can find the Product Owner's contact details at the <<ADP_Marketplace>>.
+
+[[chTrouble_Reports]]
+=== Trouble Reports
+
+If there is a suspected fault, raise a trouble report (TR). The TR must
+contain specific **Graph Database NJ** Service information and all applicable troubleshooting
+information highlighted in the xref:Troubleshooting[], and xref:DataColl[].
+
+When issuing a TR for the **Graph Database NJ** Service, you should use the **Graph Database NJ** Service CXC product number as input for Faulty Product
+section.  The product number information can be found in the **Graph Database NJ**
+Service release documentation.
+
+[bibliography]
+References
+----------
+
+[bibliography]
+- [[ADP_Marketplace]] ADP Marketplace: https://adp.ericsson.se/marketplace

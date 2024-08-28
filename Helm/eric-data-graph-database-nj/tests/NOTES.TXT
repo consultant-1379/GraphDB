@@ -1,0 +1,29 @@
+These scripts are being used for tests purposes exclusively. 
+So is not recommended to be used on production environments because it could causes undesired results.
+
+basicloadtest.sh
+
+This script identifies the number of pods and the role of each one of them. 
+It also identifies the neo4j container due it will be required for the database calls.
+Based in the pod role, it makes basic calls using cypher-shell:
+
++----------+-------------------------------------------+
+| POD type |  Database query language                  |
++----------+-------------------------------------------+
+| LEADER   | CREATE (a:Artist { Name : '$RNDSTRING' }) |
++----------+-------------------------------------------+
+| FOLLOWER | MATCH (artist:Artist) RETURN artist.Name  |
++----------+-------------------------------------------+
+| REPLICA  | MATCH (n) RETURN count(n)                 |
++----------+-------------------------------------------+
+
+Syntax: 
+./basicloadtest.sh -h  (To get help)
+   Usage: ./basicloadtest.sh {-t total}
+   t: Total number of Inserts done in neo4j DB, default is 10 inserts
+
+The script will identify each role:
+* if LEADER role is identified it will insert a number (default is 10) of basic nodes (Artist) 
+* If FOLLOWER or REPLICA is identified it just return each Node or the number of nodes added
+
+The script will drop the entire database once it finish the execution.

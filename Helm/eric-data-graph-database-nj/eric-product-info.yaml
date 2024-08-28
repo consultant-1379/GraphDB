@@ -1,0 +1,31 @@
+productName: "eric-data-graph-database-nj"
+productNumber: "CXC1010901"
+images:
+  graphdb_n4j:
+    productName: "Graph Database NJ"
+    productNumber: ""
+    name: "graphdb-n4j"
+    registry: "armdocker.rnd.ericsson.se"
+    repoPath: "aia_releases"
+    tag: VERSION
+  brAgent:
+    productName: "GraphDb bragent"
+    productNumber: ""
+    name: "graphdb-n4j-bragent"
+    registry: "armdocker.rnd.ericsson.se"
+    repoPath: "aia_releases"
+    tag: VERSION
+  neo4jServiceMigration:
+    productName: "Graphdb service migration job"
+    productNumber: ""
+    name: "neo4j-service-migration"
+    registry: "armdocker.rnd.ericsson.se"
+    repoPath: ENM_REPOPATH
+    tag: VERSION
+  neo4jSelfMonitoring:
+    productName: "Graphdb self monitoring sidecar"
+    productNumber: ""
+    name: "self-monitoring"
+    registry: "armdocker.rnd.ericsson.se"
+    repoPath: ENM_REPOPATH
+    tag: VERSION

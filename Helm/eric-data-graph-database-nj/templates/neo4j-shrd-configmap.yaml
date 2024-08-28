@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "{{.Chart.Name}}.name" . }}-scripts
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    chart: {{ template "{{.Chart.Name}}.chart" . }}
+    app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+    app.kubernetes.io/version: {{ template "{{.Chart.Name}}.version" . }}
+    app.kubernetes.io/instance: {{.Release.Name | quote }}
+  annotations:
+{{ include "{{.Chart.Name}}.prodInfoAnnotations" . | indent 4 }}  
+data:
+  orchestrator.sh: |
+{{ range .Files.Lines "scripts/orchestrator.sh" }}
+{{ . | indent 4 }}{{ end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "{{.Chart.Name}}.name" . }}-environment
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    chart: {{ template "{{.Chart.Name}}.chart" . }}
+    app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+    app.kubernetes.io/version: {{ template "{{.Chart.Name}}.version" . }}
+    app.kubernetes.io/instance: {{.Release.Name | quote }}
+  annotations:
+{{ include "{{.Chart.Name}}.prodInfoAnnotations" . | indent 4 }}  
+data:
+  NEO4J_ACCEPT_LICENSE_AGREEMENT: {{ .Values.global.acceptLicenseAgreement | quote }}
+  NUMBER_OF_CORES: {{ .Values.core.numberOfServers | quote }}

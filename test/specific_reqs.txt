@@ -1,0 +1,6 @@
+# This file defines all the dependencies that our test cases require.
+# These dependencies will be installed on the test pod.
+neo4j
+neobolt
+#neo4j==1.7.2
+#neobolt==1.7.17

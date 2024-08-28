@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "{{.Chart.Name}}.name" . }}-service-migration-job
+  labels:
+    app: {{ template "{{.Chart.Name}}.name" . }}-service-migration-job
+    app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  ttlSecondsAfterFinished: 0
+  template:
+    metadata:
+      labels:
+        app: {{ template "{{.Chart.Name}}.name" . }}-service-migration-job
+        app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+    spec:
+      serviceAccountName: service-migration-sa
+{{- if  .Values.imageCredentials.registry.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imageCredentials.registry.pullSecret | quote}}
+{{- else if .Values.global.registry.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.registry.pullSecret | quote }}
+{{- end }}
+      {{- if or .Values.nodeSelector .Values.global.nodeSelector }}
+      nodeSelector:
+      {{- if .Values.nodeSelector }}
+      {{ toYaml .Values.nodeSelector | indent 8 }}
+      {{- end }}
+      {{- if .Values.global.nodeSelector }}
+      {{ toYaml .Values.global.nodeSelector | indent 8 }}
+      {{- end }}
+      {{- end }}
+      {{- if or .Values.tolerations .Values.global.tolerations }}
+      tolerations:
+      {{- if .Values.tolerations }}
+      {{ toYaml .Values.tolerations | indent 8 }}
+      {{- end }}
+      {{- if .Values.global.tolerations }}
+      {{ toYaml .Values.global.tolerations | indent 8 }}
+      {{- end }}
+      {{- end }}
+      containers:
+      - command: ["/bin/sh", "-c", "bash /var/tmp/service-migration.sh neo4j-bragent"]
+        image: "{{ .Values.global.registry.url }}/{{ .Values.imageCredentials.neo4jEnmRepoPath }}/neo4j-service-migration:{{ .Values.images.neo4jServiceMigration.tag }}"
+        imagePullPolicy: IfNotPresent
+        name: service-migration
+        resources:
+          limits:
+            cpu: {{ .Values.resources.serviceMigrationJob.limits.cpu  }}
+            memory: {{ .Values.resources.serviceMigrationJob.limits.memory  }}
+          requests:
+            cpu: {{ .Values.resources.serviceMigrationJob.requests.cpu   }}
+            memory: {{ .Values.resources.serviceMigrationJob.requests.memory }}
+      restartPolicy: Never

@@ -1,0 +1,5 @@
+modelVersion: 2.0
+documents:
+  - name: html-va-report
+    files:
+      - ../build/va-reports/Vulnerability_Report.md

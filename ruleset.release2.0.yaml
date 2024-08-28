@@ -1,0 +1,163 @@
+modelVersion: 2.0
+
+docker:
+  registry: https://armdocker.rnd.ericsson.se/proj-enm
+
+docker-images:
+  - adp-release-auto: armdocker.rnd.ericsson.se/sandbox/adp-staging/adp-cicd/bob-adp-release-auto:latest
+  - adp-helm-dr-check: armdocker.rnd.ericsson.se/proj-adp-cicd-drop/common-library-adp-helm-dr-check:latest
+  - adp-release-cnbuild: armdocker.rnd.ericsson.se/proj_oss_releases/enm/adp-int-helm-chart-auto:latest
+  - eric-enm-version-auto: armdocker.rnd.ericsson.se/proj-enm/eric-enm-version-auto:1.1.1
+  - py3-kube-helm: armdocker.rnd.ericsson.se/sandbox/adp-staging/adp-cicd/bob-py3kubehelmbuilder:1.15.2-8
+  - adp-maven-builder: armdocker.rnd.ericsson.se/proj-adp-cicd-drop/bob-javamvnbuilder.minideb:latest
+
+properties:
+  - helm-chart-repo: https://arm.epk.ericsson.se/artifactory/proj-adp-oss-graph-database-nj-release-helm/
+  - helm-chart-repo-subpath: releases
+  - helm-destination-folder: Helm/eric-data-graph-database-nj
+  - helm-chart-name: eric-data-graph-database-nj
+  - image-registry: armdocker.rnd.ericsson.se
+  - image-drop-repopath: aia_releases/graphdb-n4j
+  - image-full-name: ${image-registry}/${image-drop-repopath}
+  - bragent-image-full-name: ${image-registry}/proj-enm/backup-restore-agent
+  - bragent-version: 2.0.51-2
+  - bro-version: 10.0.0+26
+  - enm-release-repopath: proj-enm
+  - service-migration-full-name: ${image-registry}/${enm-release-repopath}/neo4j-service-migration
+  - self-monitoring-full-name: ${image-registry}/${enm-release-repopath}/self-monitoring
+  - bro-helm-repo: https://arm.rnd.ki.sw.ericsson.se/artifactory/proj-adp-gs-all-helm/
+  - bro-chart-name: eric-ctrl-bro
+
+env:
+  - PWD (default=$PWD)
+  - RELEASE (default=true)
+  - PRODUCTION_DATE (default = $(date +%FT%TZ --utc))
+  - IMAGE_REPOPATH_INTERNAL (default=aia_releases)
+  - KUBECONFIG (default=/tmp/kube.admin.conf)
+  - HELM_REPO_API_TOKEN (default=AKCp2WY1HSJFJs1KHqVYtnadmQFw7k3A7JtcW4E9zKXKBRskkM7ZnTUQCfr9FvCp3mFattM8K)
+  - ISO_VERSION (default=2.10.13)
+  - BUILD_DATE (default = $(date -u +%d%m%Y-%H%M%S))
+
+var:
+  - version
+  - image-full-name-internal
+  - commit-hash
+  - version-prefix
+  - rstate
+
+rules:
+
+  image:
+    - task: version
+      docker-image: adp-release-auto
+      cmd: generate-version --is-release ${env.RELEASE} --output version
+    - task: generate-rstate
+      docker-image: adp-release-auto
+      cmd: get_rstate.py ${var.version} > .bob/var.rstate
+    - task: get-commit-hash
+      docker-image: adp-release-auto
+      cmd: git rev-parse HEAD > .bob/var.commit-hash
+    - task: image-full-name-internal
+      docker-image: adp-release-auto
+      cmd: echo "${image-registry}/${image-drop-repopath}" > .bob/var.image-full-name-internal
+    - task: docker-build
+      cmd: docker build ${env.PWD}
+        --file Docker/Dockerfile
+        --tag ${var.image-full-name-internal}:${var.version}
+        --build-arg GIT_COMMIT=${var.commit-hash}
+        --build-arg BUILD_DATE=${env.BUILD_DATE}
+        --build-arg IMAGE_BUILD_VERSION=${var.version}
+        --build-arg ISO_VERSION=${env.ISO_VERSION}
+        --build-arg RSTATE=${var.rstate}
+    - task: extract-bragent
+      cmd: docker run --name extract
+          --rm ${bragent-image-full-name}:${bragent-version}
+          cat /opt/ericsson/backup-restore-agent/bragent > ${env.PWD}/bragent/bragent.extracted;
+          chmod u+x ${env.PWD}/bragent/bragent.extracted
+    - task: docker-build-bragent
+      cmd: cat ${env.PWD}/bragent/bragent.Dockerfile |
+           awk '{
+             gsub("\\$GRAPHDB_REPO_PATH", "${var.image-full-name-internal}");
+             gsub("\\$GRAPHDB_TAG", "${var.version}");
+             print}' > ${env.PWD}/bragent/tmp.Dockerfile ;
+          cat ${env.PWD}/bragent/tmp.Dockerfile;
+           docker build ${env.PWD}/bragent
+           --file bragent/tmp.Dockerfile
+           --tag ${var.image-full-name-internal}-bragent:${var.version}
+           --build-arg GIT_COMMIT=${var.commit-hash}
+           --build-arg BUILD_DATE=${env.BUILD_DATE}
+           --build-arg IMAGE_BUILD_VERSION=${var.version}
+           --build-arg ISO_VERSION=${env.ISO_VERSION}
+           --build-arg RSTATE=${var.rstate}
+    - task: docker-build self-monitoring
+      cmd: docker build ${env.PWD}/self-monitoring
+        --file self-monitoring/Dockerfile
+        --tag ${self-monitoring-full-name}:${var.version}
+        --build-arg GIT_COMMIT=${var.commit-hash}
+        --build-arg BUILD_DATE=${env.BUILD_DATE}
+        --build-arg IMAGE_BUILD_VERSION=${var.version}
+        --build-arg ISO_VERSION=${env.ISO_VERSION}
+        --build-arg RSTATE=${var.rstate}
+    - task: docker-build service-migration-job
+      cmd: docker build ${env.PWD}/service-migration-job
+           --file service-migration-job/Dockerfile
+           --tag ${service-migration-full-name}:${var.version}
+           --build-arg GIT_COMMIT=${var.commit-hash}
+           --build-arg BUILD_DATE=${env.BUILD_DATE}
+           --build-arg IMAGE_BUILD_VERSION=${var.version}
+           --build-arg ISO_VERSION=${env.ISO_VERSION}
+           --build-arg RSTATE=${var.rstate}
+    - task: helm-package
+      docker-image: adp-release-auto
+      cmd: helm-package
+           --folder ${helm-destination-folder}
+           --workdir .bob --output ${helm-chart-name}
+           --version ${var.version}
+           --replace VERSION=${var.version} --replace PRODUCTION_DATE=${env.PRODUCTION_DATE} --replace BRAGENT_TAG=${bragent-version} --replace ENM_REPOPATH=${enm-release-repopath} --replace eric-product-info.yaml:ENM_REPOPATH=${enm-release-repopath} --replace eric-product-info.yaml:VERSION=${var.version}
+  push:
+    - task: image-push
+      cmd: docker push ${var.image-full-name-internal}:${var.version}
+    - task: bragent-image-push
+      cmd: docker push ${var.image-full-name-internal}-bragent:${var.version}
+    - task: self-monitoring-image-push
+      cmd: docker push ${self-monitoring-full-name}:${var.version}
+    - task: service-migration-image-push
+      cmd: docker push ${service-migration-full-name}:${var.version}
+    - task: helm-upload
+      docker-image: adp-release-auto
+      cmd:
+        - upload_file.sh --filename=${helm-chart-name}/${helm-chart-name}-${var.version}.tgz --repository=${helm-chart-repo}${helm-chart-repo-subpath}/${helm-chart-name} --api-token=${env.HELM_REPO_API_TOKEN}
+
+  remove-images:
+    - task: remove-images
+      cmd:
+        - docker image remove ${var.image-full-name-internal}:${var.version}
+        - docker image remove ${var.image-full-name-internal}-bragent:${var.version}
+        - docker image remove ${self-monitoring-full-name}:${var.version}
+        - docker image remove ${service-migration-full-name}:${var.version}
+
+  build-bragent-replica-sync:
+    - task: build-jar
+      docker-image: adp-maven-builder
+      cmd: mvn package
+        --file "${env.PWD}/bragent/pom.xml"
+        --quiet
+
+  test-deployment:
+    - task: test-deployment
+      docker-image: py3-kube-helm
+      docker-flags:
+        - "--env KUBECONFIG=/tmp/kube.admin.conf"
+        - "--env HELM_HOME=/home/helmuser/.helm"
+        - "--volume ${env.KUBECONFIG}:/tmp/kube.admin.conf:ro"
+        - "--volume ${env.PWD}:${env.PWD}"
+      cmd: python -u testframework/bootstrap.py --kubernetes-admin-conf="${env.KUBECONFIG}"
+                                                --chart-archive="/tmp/${helm-chart-name}-${var.version}".tgz
+                                                --helm-repo="${helm-chart-repo}"
+                                                --baseline_chart_version="${var.version}"
+                                                --baseline_deployment_type="deployment"
+                                                --baseline_chart_name="${helm-chart-name}"
+                                                --test-params bro-version=${bro-version} bro-helm-repo=${bro-helm-repo} bro-chart-name=${bro-chart-name}
+                                                --fail-first=True
+                                                -s test_graphdb_release.py
+

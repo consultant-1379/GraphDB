@@ -1,0 +1,26 @@
+{{- if .Values.podDisruptionBudget -}}
+{{- if .Capabilities.APIVersions.Has "policy/v1/PodDisruptionBudget" }}
+apiVersion: "policy/v1"
+{{- else }}
+apiVersion: "policy/v1beta1"
+{{- end }}
+kind: PodDisruptionBudget
+metadata:
+  name: {{ template "{{.Chart.Name}}.name" . }}
+  labels:
+    app: {{ template "{{.Chart.Name}}.name" . }}
+    chart: {{ template "{{.Chart.Name}}.chart" . }}
+    heritage: {{ .Release.Service | quote }}
+    app.kubernetes.io/instance: {{.Release.Name | quote }}
+    env: {{ .Values.global.env | quote }}
+    app.kubernetes.io/instance: {{.Release.Name | quote }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+{{ include "{{.Chart.Name}}.prodInfoAnnotations" . | indent 4 }}  
+spec:
+  selector:
+    matchLabels:
+      app: {{ template "{{.Chart.Name}}.name" . }}
+      app.kubernetes.io/instance: {{.Release.Name | quote }}
+{{ toYaml .Values.podDisruptionBudget | indent 2 }}
+{{- end -}}

@@ -1,0 +1,51 @@
+{{- if .Values.brAgent.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "{{.Chart.Name}}.name" . }}-bragent-config
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    chart: {{ template "{{.Chart.Name}}.chart" . }}
+    app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+    app.kubernetes.io/version: {{ template "{{.Chart.Name}}.version" . }}
+    app.kubernetes.io/instance: {{.Release.Name | quote }}
+data:
+  config.yaml: |
+    agent:
+      registration:
+        name: {{ template "{{.Chart.Name}}.name" . }}-bragent
+        preCmd: "/opt/ericsson/scripts/agent-start.sh"
+        {{- if .Values.brAgent.backupTypeList }}
+        scopes: {{ template "{{.Chart.Name}}.backupTypes" . }}
+        {{- end }}
+        id: {{ template "{{.Chart.Name}}.name" . }}-bragent
+      subagent:
+        grpcServerPort: "10000"
+        serverRestore: true
+    {{- if eq (include "{{.Chart.Name}}.restore.state" .) "ongoing" }}
+        enabled: true
+    restore:
+      preparationCmd: "/bin/rm -rf /data/cluster-state /data/transactions /data/databases"
+      postActionsCmd: "/opt/ericsson/scripts/neo4j-start.sh"
+      cleanupCmd: "/opt/ericsson/scripts/backup_cleanup.py"
+    {{- end }}
+    backup:
+      paths:
+        - path: "/data/databases"
+          excludes:
+            - "data/databases/store_lock"
+        - path: "/data/transactions"
+      preCmd: "/opt/ericsson/scripts/pre-backup.sh"
+      postCmd: "/opt/ericsson/scripts/post-backup.sh"
+      cleanupCmd: "/opt/ericsson/scripts/backup_cleanup.py"
+    softwareVersion:
+      description: "GraphDB (Neo4j) database"
+      productName: {{ template "{{.Chart.Name}}.name" . }}
+      productNumber: "CXC 201 2219"
+      productionDate: {{ .Values.productInfo.productionDate | quote }}
+      revision: {{ .Values.productInfo.revision | quote }}
+      type: "GraphDB"
+    bro:
+      host: {{ .Values.brAgent.broServiceName | quote }}
+      connectRetryCount: {{ .Values.brAgent.broRetryCount }}
+{{- end }}

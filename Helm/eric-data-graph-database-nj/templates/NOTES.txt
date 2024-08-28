@@ -1,0 +1,45 @@
+{{- if and (ne "yes" .Values.global.acceptLicenseAgreement ) (contains "enterprise" .Values.images.graphdb_n4j.tag)}}
+####   ERROR: You did not accept the Neo4j Enterprise License. ####
+####   ERROR: Please set acceptLicenseAgreement to yes.        ####
+###################################################################
+{{- else }}
+We'll need to wait a few seconds for the Neo4j cluster to form.
+Your release is named {{ .Release.Name }}.
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }}
+  $ helm get {{ .Release.Name }}
+
+
+We can see the content of the logs by running the following command:
+kubectl logs -l "app={{ template "{{.Chart.Name}}.name" . }},component=core"
+
+{{- if (contains "enterprise" .Values.images.graphdb_n4j.tag)}}
+
+We can now run a query to find the topology of the cluster.
+
+kubectl run -it --rm cypher-shell \
+    --image=neo4j:3.2.3-enterprise \
+    --restart=Never \
+    --namespace {{ .Release.Namespace }} \
+    --command -- ./bin/cypher-shell -u neo4j -p <password> --a {{ printf "%s-%s" .Release.Name .Values.name | trunc 56 }}.{{ printf "%s" .Release.Namespace }}.svc.cluster.local "call dbms.cluster.overview()"
+
+This will print out the addresses of the members of the cluster.
+{{- else }}
+We can now run a query to find the components versions
+
+{{- if .Values.config.neo4jPassword }}
+kubectl exec neo4j-neo4j-core-0 -- bin/cypher-shell -u neo4j -p {{ .Values.config.neo4jPassword }} --format verbose "call dbms.components()"
+
+{{- else }}
+
+kubectl exec neo4j-neo4j-core-0 -- bin/cypher-shell -u neo4j -p <<password>> --format verbose "call dbms.components()"
+
+If you didn't set a password, one will be auto generated.
+You can find the base64 encoded version of the password by running the following command:
+
+kubectl get secrets {{ template "{{.Chart.Name}}.secrets.name" . }} -o yaml
+{{- end}}
+
+{{- end}}
+{{- end}}

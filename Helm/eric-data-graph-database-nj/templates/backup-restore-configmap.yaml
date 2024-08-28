@@ -1,0 +1,18 @@
+{{- if and .Values.brAgent.enabled (eq .Values.brAgent.restorePropertyPath "") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.brAgent.restore.configMap.name }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    chart: {{ template "{{.Chart.Name}}.chart" . }}
+    app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+    app.kubernetes.io/version: {{ template "{{.Chart.Name}}.version" . }}
+    app.kubernetes.io/instance: {{.Release.Name | quote }}
+  annotations:
+{{ include "{{.Chart.Name}}.prodInfoAnnotations" . | indent 4 }}  
+data:
+  RESTORE_STATE: {{ .Values.brAgent.restore.state | quote }}
+  RESTORE_SCOPE: {{ .Values.brAgent.restore.scope | quote }}
+  RESTORE_BACKUP_NAME: {{ .Values.brAgent.restore.backupName | quote }}
+{{- end }}

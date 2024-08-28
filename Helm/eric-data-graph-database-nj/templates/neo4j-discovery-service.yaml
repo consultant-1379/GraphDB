@@ -1,0 +1,54 @@
+# Creates a service for each Core Server to facilitate
+# discovery via the k8s discovery_type mechanism.
+{{- $times := int .Values.core.numberOfServers }}
+{{- range untilStep 0 $times 1 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "{{.Chart.Name}}.name" $ }}-discovery-{{ . }}
+  annotations:
+{{ include "{{.Chart.Name}}.prodInfoAnnotations" $ | indent 4 }}
+  labels:
+    graphdb/cluster: {{ template "{{.Chart.Name}}.name" $ }}
+    graphdb/role: CORE
+    app.kubernetes.io/managed-by: {{ $.Release.Service | quote }}
+    chart: {{ template "{{.Chart.Name}}.chart" $ }}
+    app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" $ }}
+    app.kubernetes.io/version: {{ template "{{.Chart.Name}}.version" $ }}
+    app.kubernetes.io/instance: {{$.Release.Name | quote }}
+    app: {{ template "{{.Chart.Name}}.name" $ }}
+    component: core
+    env: {{ $.Values.global.env | quote }}
+spec:
+{{- if $.Values.services.clusterIP }}
+  clusterIP: {{ $.Values.services.clusterIP | quote }}
+{{- end }}
+{{- if $.Values.services.externalIPs }}
+  externalIPs:
+{{ toYaml $.Values.services.externalIPs | indent 4 }}
+{{- end }}
+{{- if $.Values.services.loadBalancerIP }}
+  loadBalancerIP: {{ $.Values.services.loadBalancerIP | quote }}
+{{- end }}
+{{- if $.Values.services.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+{{ toYaml $.Values.services.loadBalancerSourceRanges | indent 4 }}
+{{- end }}
+  publishNotReadyAddresses: true
+  ports:
+    - name: discovery
+      port: {{ $.Values.config.port.discovery }}
+      targetPort: {{ $.Values.config.port.discovery }}
+      protocol: TCP
+    - name: transaction
+      port: {{ $.Values.config.port.tx }}
+      targetPort: {{ $.Values.config.port.tx }}
+      protocol: TCP
+    - name: raft
+      port: {{ $.Values.config.port.raft }}
+      targetPort: {{ $.Values.config.port.raft }}
+      protocol: TCP
+  selector:
+    statefulset.kubernetes.io/pod-name: "{{ template "{{.Chart.Name}}.name" $ }}-{{ . }}"
+{{- end }}

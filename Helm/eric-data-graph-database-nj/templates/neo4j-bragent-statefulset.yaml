@@ -1,0 +1,337 @@
+{{- if .Values.brAgent.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ template "{{.Chart.Name}}.name" . }}-bragent
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    chart: {{ template "{{.Chart.Name}}.chart" . }}
+    app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+    app.kubernetes.io/version: {{ template "{{.Chart.Name}}.version" . }}
+    app.kubernetes.io/instance: {{.Release.Name | quote }}
+    app: {{ template "{{.Chart.Name}}.name" . }}
+    component: bragent
+    env: {{ .Values.global.env | quote }}
+  annotations:
+{{ include "{{.Chart.Name}}.prodInfoAnnotations" . | indent 4 }}
+spec:
+  serviceName: {{ template "{{.Chart.Name}}.name" . }}-bragent
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ template "{{.Chart.Name}}.name" . }}
+      app.kubernetes.io/instance: {{.Release.Name | quote }}
+      component: bragent
+  updateStrategy:
+    type: {{ .Values.updateStrategy.type | quote }}
+  {{- if .Values.updateStrategy.rollingUpdate }}
+    rollingUpdate:
+      partition: {{ .Values.updateStrategy.rollingUpdate.partition }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+        app: {{ template "{{.Chart.Name}}.name" . }}
+        app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+        app.kubernetes.io/version: {{ template "{{.Chart.Name}}.version" . }}
+        app.kubernetes.io/instance: {{.Release.Name | quote }}
+        component: bragent
+        adpbrlabelkey: {{ template "{{.Chart.Name}}.name" . }}-bragent
+{{- if .Values.brAgent.backupTypeList }}
+      annotations:
+      {{- if .Values.annotations }}
+        {{- if eq "true" (include "eric-data-graph-database-nj.log-streaming-activated" .) }}
+          {{- include "eric-log-shipper-sidecar.LsAppArmorProfileAnnotation" . | indent 8 }}
+        {{- end }}
+      {{- end }}
+        backupType: {{ template "{{.Chart.Name}}.backupTypes" . }}
+{{- end}}
+{{- if .Values.annotations }}
+{{- if .Values.prodInfoAnnotations }}
+{{ toYaml .Values.prodInfoAnnotations | indent 8 }}
+{{- end }}
+{{- end }}
+    spec:
+      serviceAccountName: {{ template "{{.Chart.Name}}.serviceAccountName" . }}
+      terminationGracePeriodSeconds: 180
+{{- if or .Values.nodeSelector .Values.global.nodeSelector }}
+      nodeSelector:
+{{- if .Values.nodeSelector }}
+{{ toYaml .Values.nodeSelector | indent 8 }}
+{{- end }}
+{{- if .Values.global.nodeSelector }}
+{{ toYaml .Values.global.nodeSelector | indent 8 }}
+{{- end }}
+{{- end }}
+{{- if or .Values.tolerations .Values.global.tolerations }}
+      tolerations:
+{{- if .Values.tolerations }}
+{{ toYaml .Values.tolerations | indent 8 }}
+{{- end }}
+{{- if .Values.global.tolerations }}
+{{ toYaml .Values.global.tolerations | indent 8 }}
+{{- end }}
+{{- end }}
+      containers:
+      - name: {{ template "{{.Chart.Name}}.name" . }}
+        {{- if .Values.imageCredentials.registry.url }}
+        image: "{{ .Values.imageCredentials.registry.url }}/{{ .Values.imageCredentials.repoPath }}/{{ .Values.images.brAgent.name }}:{{ .Values.images.brAgent.tag }}"
+        {{- else }}
+        image: "{{ .Values.global.registry.url }}/{{ .Values.imageCredentials.repoPath }}/{{ .Values.images.brAgent.name }}:{{ .Values.images.brAgent.tag }}"
+        {{- end }}
+
+        imagePullPolicy: {{ .Values.images.brAgent.imagePullPolicy | quote }}
+        lifecycle:
+          preStop:
+            exec:
+              command: ["bash", "-c", ". /ericsson/3pp/neo4j/conf/neo4j_env; /opt/ericsson/neo4j/service/stop.py"]
+        env:
+          - name: DUMPS_PATH
+            value: {{ .Values.dumps.mountPath | quote }}
+          - name: MAX_DIRECT_MEMORY_SIZE
+            value: {{ .Values.config.maxDirectMemorySize | quote }}
+          - name: RELEASE_NAMESPACE
+            value: {{ .Release.Namespace | quote}}
+          - name: NEO4J_SERVICE_NAME
+            value: "{{ template "{{.Chart.Name}}.name" . }}"
+          - name: NEO4J_BOLT_PORT
+            value: {{ .Values.config.port.bolt | quote }}
+          - name: NEO4J_HTTP_PORT
+            value: {{ .Values.config.port.http | quote }}
+          - name: NEO4J_HTTPS_PORT
+            value: "7473"
+          - name: DEPLOYMENT_TYPE
+            value: {{ .Values.brAgent.deploymentType | quote }}
+          - name: NEO4J_dbms_memory_heap_initial__size
+            value: {{ .Values.brAgent.heap_min_size | quote }}
+          - name: NEO4J_dbms_memory_heap_max__size
+            value: {{ .Values.brAgent.heap_max_size | quote }}
+          - name: NEO4J_dbms_memory_pagecache_size
+            value: {{ .Values.brAgent.pagecache_size | quote }}
+          - name: NEO4J_causal__clustering_multi__dc__license
+            value: "true"
+          - name: NEO4J_causal__clustering_load__balancing_plugin
+            value: "server_policies"
+          - name: NEO4J_causal__clustering_server__groups
+            value: "backup-agent"
+          - name: NEO4J_causal__clustering_upstream__selection__strategy
+            value: "connect-to-random-core-server"
+          - name: NEO4J_ACCEPT_LICENSE_AGREEMENT
+            value: "{{ .Values.global.acceptLicenseAgreement }}"
+          - name: NEO4J_dbms_mode
+            value: READ_REPLICA
+          # Logging Configuration
+          - name: NEO4J_dbms_logs_debug_level
+            value: {{ .Values.brAgent.logging.debug.level | quote }}
+          - name: NEO4J_dbms_logs_debug_rotation_size
+            value: {{ .Values.brAgent.logging.debug.rotationSize | quote }}
+          - name: NEO4J_dbms_logs_debug_rotation_keep__number
+            value: {{ .Values.brAgent.logging.debug.rotationKeepNumber | quote }}
+          - name: NEO4J_dbms_logs_security_level
+            value: {{ .Values.brAgent.logging.security.level | quote }}
+          - name: NEO4J_dbms_logs_security_rotation_size
+            value: {{ .Values.brAgent.logging.security.rotationSize | quote }}
+          - name: NEO4J_dbms_logs_security_rotation_keep__number
+            value: {{ .Values.brAgent.logging.security.rotationKeepNumber | quote }}
+          - name: NEO4J_dbms_logs_query_enabled
+            value: {{ .Values.brAgent.logging.query.level | quote }}
+          - name: NEO4J_dbms_logs_query_rotation_size
+            value: {{ .Values.brAgent.logging.query.rotationSize | quote }}
+          - name: NEO4J_dbms_logs_query_rotation_keep__number
+            value: {{ .Values.brAgent.logging.query.rotationKeepNumber | quote }}
+          - name: NEO4J_dbms_logs_query_threshold
+            value: {{ .Values.brAgent.logging.query.threshold | quote }}
+          - name: NEO4J_dbms_logs_query_page__logging__enabled
+            value: {{ .Values.brAgent.logging.query.pageLoggingEnabled | quote }}
+          - name: NEO4J_dbms_logs_query_allocation__logging__enabled
+            value: {{ .Values.brAgent.logging.query.allocationLoggingEnabled | quote }}
+          - name: NEO4j_dbms_logs_query_parameter__logging__enabled
+            value: {{ .Values.brAgent.logging.query.parameterLoggingEnabled | quote }}
+          - name: NEO4j_dbms_logs_query_time__logging__enabled
+            value: {{ .Values.brAgent.logging.query.timeLoggingEnabled | quote }}
+          - name: NEO4J_dbms_logs_gc_enabled
+            value: {{ .Values.brAgent.logging.gc.enabled | quote }}
+          - name: NEO4J_dbms_logs_gc_rotation_size
+            value: {{ .Values.brAgent.logging.gc.rotationSize | quote }}
+          - name: NEO4J_dbms_logs_gc_rotation_keep__number
+            value: {{ .Values.brAgent.logging.gc.rotationKeepNumber | quote }}
+          - name: NEO4J_dbms_logs_http_enabled
+            value: {{ .Values.brAgent.logging.http.enabled | quote }}
+          - name: NEO4J_dbms_logs_http_rotation_size
+            value: {{ .Values.brAgent.logging.http.rotationSize | quote }}
+          - name: NEO4J_dbms_logs_http_rotation_keep__number
+            value: {{ .Values.brAgent.logging.http.rotationKeepNumber | quote }}
+          - name: NEO4J_dbms_security_auth__enabled
+            value: "{{ .Values.config.authEnabled }}"
+          - name: NEO4J_causal__clustering_discovery__type
+            value: {{ .Values.config.clusterDiscoveryType }}
+          - name: NEO4J_TX_PORT
+            value: {{ .Values.config.port.tx | quote }}
+          - name: NEO4J_DISCOVERY_PORT
+            value: {{ .Values.config.port.discovery | quote }}
+          - name: NEO4J_RAFT_PORT
+            value: {{ .Values.config.port.raft | quote }}
+          - name: NEO4J_causal__clustering_initial__discovery__members
+            value: {{ include "{{.Chart.Name}}.podsname" . | quote }}
+          - name: NEO4J_dbms_directories_data
+            value: "{{ .Values.persistentVolumeClaim.mountPath }}"
+          - name: GRAPHDB_RELEASE_NAME
+            value: {{ template "{{.Chart.Name}}.name" . }}
+          - name: NEO4J_causal__clustering_cluster__topology__refresh
+            value: {{ .Values.config.refreshRate }}
+          - name: TZ
+            value: {{ .Values.global.timezone }}
+          - name: AGENT_NEO4J_REPLICA_START_TIMEOUT_MINS
+            value: {{ .Values.brAgent.replicaStartTimeoutMins | quote }}
+          - name: PRE_BACKUP_REPLICA_SYNC_TIMEOUT
+            value: {{ .Values.brAgent.replicaSyncTimeout | quote }}
+          - name: NEO4J_PORT_BOLT
+            value: {{ .Values.config.port.bolt | quote }}
+          - name: NEO4J_PORT_HTTP
+            value: {{ .Values.config.port.http | quote }}
+          {{- if .Values.config.neo4jPasswordForTest }}
+          - name: PYU_ENM_USER_PASSWORD
+            value: {{ .Values.config.neo4jPasswordForTest | quote }}
+          {{- end }}
+{{- if .Values.config.prometheusMonitoring.enabled }}
+          - name: NEO4J_metrics_prometheus_enabled
+            value: "true"
+          - name: NEO4J_metrics_prometheus_endpoint
+            value: "0.0.0.0:2004"
+{{- end }}
+          - name: RESTORE_STATE
+            valueFrom:
+              configMapKeyRef:
+                name: {{ include "{{.Chart.Name}}.restore" (list "configMap.name" .) }}
+                key: {{ include "{{.Chart.Name}}.restore" (list "configMap.restoreStateKey" .) }}
+          - name: consistency_check_enabled
+            value: {{ .Values.brAgent.consistencyCheck.enabled | quote }}
+          - name: pre_backup_synchronization_enabled
+            value: {{ .Values.brAgent.preBackupSynchronization.enabled | quote }}
+          - name: NEO4J_dbms_default__database
+            value: {{ .Values.config.defaultDatabaseName | quote }}
+          - name: NEO4J_SHUTDOWN_TIMEOUT
+            value: {{ .Values.config.neo4jShutDownTimeout | quote }}
+{{- if .Values.readReplica.extraVars }}
+{{ toYaml .Values.readReplica.extraVars | indent 10 }}
+{{- end }}
+        ports:
+        - containerPort: {{ .Values.config.port.http }}
+          name: http
+        - containerPort: {{ .Values.config.port.bolt }}
+          name: bolt
+        - containerPort: {{ .Values.config.port.tx }}
+          name: tx
+        - containerPort: 10000
+          name: grpc
+{{- if .Values.config.prometheusMonitoring.enabled }}
+        - containerPort: {{ .Values.config.port.prometheusMonitoring }}
+          name: metrics
+{{- end }}
+        resources:
+          limits:
+            cpu: {{ .Values.resources.brAgent.limits.cpu }}
+            memory: {{ .Values.resources.brAgent.limits.memory }}
+          requests:
+            cpu: {{ .Values.resources.brAgent.requests.cpu }}
+            memory: {{ .Values.resources.brAgent.requests.memory }}
+{{- if .Values.config.liveness.enabled }}
+        livenessProbe:
+          exec:
+            command: ["/opt/ericsson/scripts/health-check.sh"]
+          initialDelaySeconds: 300
+          timeoutSeconds: 300
+          successThreshold: 1
+          failureThreshold: 10
+{{- end }}
+        volumeMounts:
+{{- if .Values.dumps.volumeClaimName }}
+        - name: "hcdumps"
+          mountPath: {{ .Values.dumps.mountPath | quote }}
+{{- end }}
+        - name: {{ .Values.persistentVolumeClaim.name }}-bragent
+          mountPath: {{ .Values.persistentVolumeClaim.mountPath | quote }}
+          {{- if .Values.persistentVolumeClaim.subPath }}
+          subPath: {{ .Values.persistentVolumeClaim.subPath | quote }}
+          {{- end }}
+        - name: plugins
+          mountPath: /plugins
+{{- if eq "false" (include "eric-data-graph-database-nj.log-streaming-activated" .) }}
+        - name: {{ template "{{.Chart.Name}}.name" . }}-logs
+          mountPath: /logs
+{{- end }}
+        {{- if eq "true" (include "eric-data-graph-database-nj.log-streaming-activated" .) }}
+          {{- include "eric-log-shipper-sidecar.log-shipper-sidecar-mounts" . | indent 8 }}
+        {{- end }}
+        - name: {{ template "{{.Chart.Name}}.name" . }}-bragent-config
+          mountPath: "/etc/bragent/agent"
+          readOnly: true
+{{- if eq "true" (include "eric-data-graph-database-nj.log-streaming-activated" .) }}
+  {{- $logshipperImageDict := dict "logshipperSidecarImage" ((((.Values).global).logShipper).config).image -}}
+  {{- include "eric-log-shipper-sidecar.log-shipper-sidecar-container" (mergeOverwrite . $logshipperImageDict ) | indent 6 }}
+{{- end }}
+{{- if .Values.core.sidecarContainers }}
+{{ toYaml .Values.core.sidecarContainers | indent 6 }}
+{{- end }}
+{{- if  .Values.brAgent.securityContext }}
+      securityContext:
+{{ toYaml .Values.brAgent.securityContext | indent 8 }}
+{{- end }}
+{{- if .Values.readReplica.initContainers }}
+      initContainers:
+{{ toYaml .Values.readReplica.initContainers | indent 6 }}
+{{- end }}
+      volumes:
+{{- if .Values.dumps.volumeClaimName }}
+        - name: "hcdumps"
+          persistentVolumeClaim:
+            claimName: {{ .Values.dumps.volumeClaimName | quote }}
+{{- end }}
+        {{- if not .Values.persistentVolumeClaim.enabled }}
+        - name: {{ .Values.persistentVolumeClaim.name }}-bragent
+          emptyDir: {}
+        {{- end }}
+        - name: {{ template "{{.Chart.Name}}.name" . }}-metrics
+          configMap:
+            name: {{ template "{{.Chart.Name}}.name" . }}-metrics-config
+        - name: plugins
+          emptyDir: {}
+{{- if eq "false" (include "eric-data-graph-database-nj.log-streaming-activated" .) }}
+        - name: {{ template "{{.Chart.Name}}.name" . }}-logs
+          emptyDir: {}
+{{- end }}
+        - name: {{ template "{{.Chart.Name}}.name" .  }}-data
+          configMap:
+            name: {{ template "{{.Chart.Name}}.name" . }}-data
+{{- if eq "true" (include "eric-data-graph-database-nj.log-streaming-activated" .) }}
+  {{- include "eric-log-shipper-sidecar.log-shipper-sidecar-volumes" . | indent 8 }}
+{{- end }}
+        - name: {{ template "{{.Chart.Name}}.name" . }}-bragent-config
+          configMap:
+            name: {{ template "{{.Chart.Name}}.name" . }}-bragent-config
+    {{- if  .Values.imageCredentials.registry.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imageCredentials.registry.pullSecret | quote}}
+      {{- else if .Values.global.registry.pullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.global.registry.pullSecret | quote }}
+    {{- end }}
+{{- end }}
+{{- if .Values.persistentVolumeClaim.enabled }}
+  volumeClaimTemplates:
+  - metadata:
+      name: {{ .Values.persistentVolumeClaim.name }}-bragent
+    spec:
+      accessModes:
+        - {{ .Values.persistentVolumeClaim.accessMode }}
+    {{- if .Values.persistentVolumeClaim.storageClass }}
+      {{- if (eq "-" .Values.persistentVolumeClaim.storageClass) }}
+      storageClassName: ""
+      {{- else }}
+      storageClassName: {{ .Values.persistentVolumeClaim.storageClass | quote }}
+      {{- end }}
+    {{- end }}
+      resources:
+        requests:
+          storage: {{ .Values.persistentVolumeClaim.size }}
+{{- end }}

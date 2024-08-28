@@ -1,0 +1,18 @@
+= Graph Database NJ Service - Additional Documents in the ADP Marketplace
+:author: Niamh Shiel
+:doc-name: Graph Database NJ Service - Additional Documents in the ADP Marketplace
+:doc-no: 
+:revnumber: 
+:revdate: {sys: date +%Y-%m-%d}
+:approved-by-name: 
+:approved-by-department: BDGS
+
+
+This page will contain links to additional documents related to the **Graph Database NJ** service.
+
+
+https://gerrit.ericsson.se/plugins/gitiles/AIA/microservices/GraphDB/+/refs/heads/master/README.md[Inner source, README] ::
+Inner source instructions specific to the service, explaining how to get started.
+
+https://gerrit.ericsson.se/plugins/gitiles/AIA/microservices/GraphDB/+/refs/heads/master/CONTRIBUTING.md[Inner source, CONTRIBUTING] ::
+Inner source instructions specific to the service, explaining how to contribute.

@@ -1,0 +1,545 @@
+
+updateStrategy:
+  # Mandatory: Using RollingUpdate as indicated on DR-HC-060
+  type: RollingUpdate
+  rollingUpdate:
+    # Mandatory: specifies the maximum number of Pods that can be unavailable during the update process and shall be mapped to
+    maxUnavailable: 1
+    # Optional specifies the maximum number of Pods that can be created over the desired number of Pod and shall be mapped to
+    maxSurge: 0
+    # Mandatory: only for StatefulSet's RollingUpdate field. All Pods with an ordinal number that is greater than or equal
+    # to the partition value are updated.
+    partition: 0
+
+global:
+  registry:
+    # Mandatory: Used to compose the image name.
+    url: armdocker.rnd.ericsson.se
+  # Optional If it's a licensed neo4j version must agree the license.
+  acceptLicenseAgreement: "yes"
+  env: "beta"
+  repoPath: "aia_releases"
+  timezone:
+  security:
+    tls:
+      enabled: false
+
+lifecycleHook:
+  enabled: false
+  postStart: {}
+
+imageCredentials:
+  pullPolicy: Always
+  registry:
+    url: # overrides global registry url
+    #pullSecret: # note: armdocker does not request pullSecret
+  repoPath: "aia_releases"
+  enmRepoPath: "proj-enm"
+  neo4jEnmRepoPath: ENM_REPOPATH
+  logshipper:
+    registry:
+      url:
+      imagePullPolicy:
+    repoPath: "proj-adp-log-released"
+
+# Mandatory Image information
+images:
+  graphdb_n4j:
+    # Mandatory: Used to compose the global image name
+    name: "graphdb-n4j"
+    # Mandatory: Used to compose the global image name
+    tag: VERSION
+    # Mandatory could be IfNotPresent, Always, Never
+    imagePullPolicy: "Always"
+  brAgent:
+    name: "graphdb-n4j-bragent"
+    tag: VERSION
+    imagePullPolicy: "Always"
+  eric-enm-sles-base:
+    name: eric-enm-sles-base
+    tag: latest
+  backup_restore_agent:
+    name: "backup-restore-agent"
+    tag: BRAGENT_TAG
+  neo4jServiceMigration:
+    tag: VERSION
+  neo4jSelfMonitoring:
+    tag: VERSION
+
+productInfo:
+  # R-State of the product. R State should match helm chart version (3.1.0 -> R2A)
+  rstate: RSTATE
+  productionDate: PRODUCTION_DATE
+  revision: VERSION
+
+annotations:
+  persistentVolume: ""
+
+prometheus:
+  core:
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "2004"
+    prometheus.io/scrape: "true"
+  monitoring:
+    prometheus.io/path: "/metrics"
+    prometheus.io/port: "3004"
+    prometheus.io/scrape: "true"
+
+
+terminationGracePeriodSeconds:
+  neo4jContainer: 1800
+
+ingress:
+  enabled: false
+  hostname:
+  ingressClass:
+  tls:
+    passthrough: false
+
+config:
+  # K8s pod management policies (default for SS is OrderedReady)
+  podManagementPolicy: Parallel
+  # Expose Neo4j Browser through convenience ingress
+  exposeBrowser: false
+  # Expose Bolt through convenience ingress
+  exposeBolt: false
+  # Mandatory Use password authentication
+  authEnabled: true
+  # Optional Specify password for neo4j user
+  # Optional Defaults to a random 10-character alphanumeric string if not set and authEnabled is true
+  neo4jPasswordForTest: ""
+  # Specify cluster domain (used eg. as suffix in definition of NEO4J_causal__clustering_initial__discovery__members environment variable)
+  clusterDomain: "cluster.local"
+  # RefreshRate value for topology and Read-Replica
+  refreshRate: "5s"
+  #Mandatory Specify causal clustering instances communicate over the network to ensure consistency of the database.
+  ## LIST, DNS, SRV, K8S
+  clusterDiscoveryType: K8S
+  defaultDatabaseName: neo4j
+  neo4jShutDownTimeout: 1800
+  # set a default value for memory size
+  maxDirectMemorySize: 3g
+  #Mandatory Neo4j current ports used
+  port:
+    # Mandatory neo4j http port
+    http: 7474
+    # Mandatory specifies where the bolt driver ( client-server protocol designed for database applications )
+    bolt: 7687
+    # Mandatory specifies where the instance advertises where it will listen for requests for transactions in the transaction-shipping catchup protocol.
+    tx: 6000
+    # Mandatory port to bind the cluster member discovery management communication.
+    discovery: 5000
+    # Mandatory The address/port setting that specifies which network interface and port the Neo4j instance will bind to for cluster communication.
+    raft: 7000
+    # Optional for kubernetes monitoring
+    prometheusMonitoring: 2004
+    # Mandatory: Remote Backup port protocol for enterprise
+    remote_backup: 6362
+  # Mandatory Used when pods needs to be recreated
+  liveness:
+    enabled: true
+    # Mandatory Initial time to validate the pod liveness
+    initialDelaySeconds: 120
+    # Mandatory cron time to validate if is still active
+    periodSeconds: 60
+    # Mandatory On timeout is restarted
+    timeoutSeconds: 240
+    # Number of failed before restart
+    failureThreshold: 1
+    # Number of success
+    successThreshold: 1
+    # Log Shipper liveness configuration
+
+
+  # Mandatory Used when pods are considered ready to attend
+  readinessProbe:
+    enabled: true
+    # Mandatory Initial time to validate the pod readiness
+    initialDelaySeconds: 120
+    # Mandatory cron time to validate if its active
+    periodSeconds: 60
+    # Mandatory On timeout is restarted
+    timeoutSeconds: 120
+    # Number of success
+    successThreshold: 1
+    # Number of failed before retry the starting
+    failureThreshold: 10
+
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 60
+    # Mandatory cron time to validate if its active
+    periodSeconds: 60
+    # Mandatory On timeout is restarted
+    timeoutSeconds: 50
+    # Number of failed before retry the starting
+    failureThreshold: 60
+
+  prometheusMonitoring:
+    enabled: true
+
+  logging:
+    debug:
+      # Valid values are DEBUG, INFO, WARN, ERROR, NONE
+      level: INFO
+      rotationSize: 20m
+      rotationKeepNumber: 7
+    security:
+      # Valid values are DEBUG, INFO, WARN, ERROR, NONE
+      level: INFO
+      rotationSize: 20m
+      rotationKeepNumber: 7
+    query:
+      # Valid values are OFF, INFO, VERBOSE
+      level: INFO
+      rotationSize: 20m
+      rotationKeepNumber: 7
+      threshold: 0s
+      pageLoggingEnabled: false
+      allocationLoggingEnabled: true
+      parameterLoggingEnabled: true
+      timeLoggingEnabled: false
+    gc:
+      enabled: false
+      rotationSize: 20m
+      rotationKeepNumber: 0
+    http:
+      enabled: false
+      rotationSize: 20m
+      rotationKeepNumber: 5
+
+  # Optional Pass extra environment variables to Neo4j container.
+  extraVars:
+  #Optional: Neo4j the heap memory size
+  - name: "NEO4J_dbms_memory_heap_max__size"
+    value: "1g"
+  - name: "NEO4J_dbms_memory_heap_initial__size"
+    value: "1g"
+  - name: "NEO4J_dbms_connector_bolt_listen__address"
+    value: "0.0.0.0:7687"
+  - name: "NEO4J_dbms_connector_http_listen__address"
+    value: "0.0.0.0:7474"
+  # Mandatory: Specify one of the followings DEBUG, INFO, WARN, ERROR, NONE
+  - name: "NEO4J_dbms_logs_debug_level"
+    value: "DEBUG"
+  # Mandatory: To allow remote backups
+  - name: "NEO4J_dbms_backup_enabled"
+    value: "true"
+  # Mandatory: To allow remote backups ipaddress
+  - name: "NEO4J_dbms_backup_listen__address"
+    value: "0.0.0.0:6362"
+  - name: NEO4J_causal__clustering_cluster__binding__timeout
+    value: "15m"
+# Enable encryption on the backup service for CC instances (does not work for single-instance or HA clusters)
+#  - name: NEO4J_dbms_backup_ssl__policy
+#    value: backup
+
+services:
+  externalIPs: []
+  loadBalancerIP: ""
+  loadBalancerSourceRanges: []
+  # optional If defined clusterDiscoveryType as DNS needs to be defined
+  dns:
+    port: 7474
+    protocol: "TCP"
+    clusterIP: None
+
+#Optional for highly available applications for automated cluster actions for pods disruptions
+podDisruptionBudget: {}
+
+# Affinity for pod assignment
+affinity: {}
+
+# Dumps volume
+dumps:
+  mountPath: "/data/"
+  volumeClaimName: ""
+
+#Optional: Enabled false will use EmptyDir instead
+persistentVolumeClaim:
+  name: neo4j-pvc-data
+  # True: The Database will be exposed in a Physical Volume
+  # False: The database is handled in the internal empty pod volume
+  enabled: false
+  # Optional: Specify a particular independent claim to use with the DB
+  # existingClaim:
+  # Optional: Not remove PVC on helm operations
+  resourcePolicy: "keep"
+  # Mandatory: Must be changed to the appropieted value "Delete", "Recycle", "Retain"
+  reclaimPolicy: "Retain"
+  # Host path used in PV to mount in the NFS Server
+  # Example hot to define the NFS Server
+  #nfs:
+  #   ip: servername
+  #   datapath: /data2
+  #   bckpath: /data3
+  #   logpath: /data4
+  #Mandatory for PV: ReadWriteOnce, ReadOnlyMany, ReadWriteMany
+  accessMode: ReadWriteOnce
+  ## Mandatory: neo4j server data path
+  mountPath: /data
+
+  ## core server data Persistent Volume size
+  size: 2Gi
+
+  # Optional core server data Persistent Volume Storage Class
+  # If defined, storageClassName: <storageClass>
+  # If set to "-", storageClassName: "", which disables dynamic provisioning
+  # If undefined (the default) or set to null, no storageClassName spec isf
+  #   set, choosing the default provisioner.  (gp2 on AWS, standard on
+  #   GKE, AWS & OpenStack)
+  storageClass: "network-block"
+  #storageClass: manual
+  # Subdirectory of core server data Persistent Volume to mount
+  # Useful if the volume's root directory is not empty
+  # subPath: data
+
+  # Online Volume backup settings.
+  # Community edition doesn't support online backups
+  backup:
+    # Pod volumne mount path
+    mountPath: /backups
+    # default Size for online backups process.
+    size: 2Gi
+    # If want to use a pre-defined PVC, define it using existingClaim
+    # existingClaim:
+    accessMode: ReadWriteOnce
+    # If needs to use the default storageclass needs to be set as "-"
+    storageClass: "network-block"
+    # if PVC is removed, keeps the information on the Physical Volume
+    reclaimPolicy: Retain
+  logging:
+    mountDir: /logs
+    size: 2Gi
+    # existingClaim:
+    accessMode: ReadWriteOnce
+    reclaimPolicy: Retain
+    storageClass: "network-block"
+
+# Replica Cores settings for deployments
+core:
+  numberOfServers: 3
+
+  sidecarContainers: []
+  ## Additional containers to be added to the Neo4j core pod.
+  #  - name: my-sidecar
+  #    image: nginx:latest
+
+  initContainers:
+    enabled: false
+    name:
+    tag:
+  initHooks: []
+
+# Read Replicas
+readReplica:
+  numberOfServers: 0
+  # Pass extra environment variables to the Neo4j container.
+  #
+  # extraVars:
+  # - name: EXTRA_VAR_1
+  #   value: extra-var-value-1
+  # - name: EXTRA_VAR_2
+  #   value: extra-var-value-2
+
+autoscaling:
+  enable: false
+  autoscaling:
+    minReplicas: 2
+    maxReplicas: 16
+    # Note: when setting this, a `resources.request.cpu` is required. You
+    # likely want to set it to `1` or some lower value.
+    targetCPUUtilizationPercentage: "80%"
+    targetMemoryUtilizationPercentage: "70%"
+
+resources:
+  graphdb:
+    limits:
+      # 1000m represents 1 CPU
+      cpu: 2000m
+      memory: 4096Mi
+    requests:
+      cpu: 1000m
+      memory: 2048Mi
+  brAgent:
+    limits:
+      # 1000m represents 1 CPU
+      cpu: 2000m
+      memory: 4096Mi
+    requests:
+      cpu: 1000m
+      memory: 2048Mi
+  selfMonitoring:
+    limits:
+      memory: 150Mi
+      cpu: 200m
+    requests:
+      memory: 50Mi
+      cpu: 50m
+#  logshipper:
+#    limits:
+#      memory: "100Mi"
+#      cpu: "100m"
+#    requests:
+#      memory: "50Mi"
+#      cpu: "50m"
+  restoreSubAgent:
+    limits:
+      # 1000m represents 1 CPU
+      cpu: 2000m
+      memory: 256Mi
+    requests:
+      cpu: 1000m
+      memory: 128Mi
+  initPlugins:
+    limits:
+      memory: 100Mi
+      cpu: 50m
+    requests:
+      memory: 100Mi
+      cpu: 50m
+  serviceMigrationJob:
+    limits:
+      cpu: 200m
+      memory: 100Mi
+    requests:
+      cpu: 200m
+      memory: 100Mi
+
+metrics:
+  rules: "metrics/rules.yml"
+
+log:
+  # Supported values ["stdout", "stream"]
+  outputs: null
+
+logShipper:
+  logLevel: info
+  runAndExit: true
+  shutdownDelay: 10
+  input:
+    files:
+      - enabled: true
+        paths:
+          - "app.log*"
+          - "neo4j.log*"
+          - "debug.log*"
+          - "query.log*"
+          - "security.log*"
+          - "gc.log*"
+          - "http.log*"
+  storage:
+    path: "/logs"
+    size: "300Mi"
+  output:
+    logtransformer:
+      host: eric-log-transformer
+appArmorProfile:
+  logshipper:
+    type: ""
+
+probes:
+  logshipper:
+    livenessProbe:
+      initialDelaySeconds: 1
+      timeoutSeconds: 10
+      periodSeconds: 10
+      successThreshold: 1
+      failureThreshold: 3
+
+scripts:
+  directory: "/tmp/scripts"
+  # Executes an full online backup as part of the pre-upgrade process
+  backup:
+    filename: "backup.sh"
+  # Execute remote ports validations for liveness
+  remote:
+    filename: "remote.sh"
+  consistency:
+    filename: "consistency.sh"
+  orchestrator:
+    filename: "orchestrator.sh"
+# If is required to execute hooks controlled scripts
+remoteScripts: []
+  # graphdb_name: "graphdb-neo4j"
+  # admin_user: "neo4j"
+  # parameters:
+  # check_neo4j.sh: "-n 3"
+# create_user.sh: "graphdb-neo4j.eisljos-dev.svc.cluster.local demo demo admin false"
+
+# Used in conjuntion of log-shipper
+additionalVolumes: []
+additionalVolumeMounts: []
+nameOverride:
+brAgent:
+  heap_min_size: "1g"
+  heap_max_size: "1g"
+  pagecache_size: "1g"
+  enabled: true
+  restorePropertyPath: ""
+  deploymentType: "instance_enm"
+  restore:
+    configMap:
+      name: backup-restore-configmap
+      restoreStateKey: RESTORE_STATE
+    state: ""
+    scope: ""
+    backupName: ""
+  broServiceName: eric-ctrl-bro
+  broRetryCount: 3
+  backupTypeList:
+  replicaStartTimeoutMins: 60
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 7474
+    fsGroup: 7474
+    fsGroupChangePolicy: "OnRootMismatch"
+  replicaSyncTimeout: 300s
+  logging:
+    debug:
+      # Valid values are DEBUG, INFO, WARN, ERROR, NONE
+      level: INFO
+      rotationSize: 20m
+      rotationKeepNumber: 7
+    security:
+      # Valid values are DEBUG, INFO, WARN, ERROR, NONE
+      level: INFO
+      rotationSize: 20m
+      rotationKeepNumber: 7
+    query:
+      # Valid values are OFF, INFO, VERBOSE
+      level: INFO
+      rotationSize: 20m
+      rotationKeepNumber: 7
+      threshold: 0s
+      pageLoggingEnabled: false
+      allocationLoggingEnabled: true
+      parameterLoggingEnabled: true
+      timeLoggingEnabled: false
+    gc:
+      enabled: false
+      rotationSize: 20m
+      rotationKeepNumber: 0
+    http:
+      enabled: false
+      rotationSize: 20m
+      rotationKeepNumber: 5
+  serviceAccount:
+    # Controls the creation of ServiceAccount, Role and RoleBinding to be used in restore operation.
+    # When they are externally defined, set it to false and provide the ServiceAccount name.
+    create: true
+    # Name of the ServiceAccount to be used. Leave empty to use <Chart.name>-bragent .
+    # If the ServiceAccount, Role and RoleBinding are externally defined, the Role MUST have
+    # at least get, list, watch authorization for statefulsets, deployments and pods resources
+    name:
+  consistencyCheck:
+    enabled: true
+  preBackupSynchronization:
+    enabled: true
+securityContext:
+  pod:
+    runAsUser: 7474
+    runAsGroup: 7474
+  service:
+    fsGroup: 7474
+    fsGroupChangePolicy: "OnRootMismatch"

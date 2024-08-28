@@ -1,0 +1,22 @@
+{{ if .Values.config.exposeBrowser }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ template "{{.Chart.Name}}.name" . }}-ingress-browser
+  annotations:
+    kubernetes.io/ingress.class: nginx
+{{ include "{{.Chart.Name}}.prodInfoAnnotations" . | indent 4 }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    chart: {{ template "{{.Chart.Name}}.chart" . }}
+    app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}-ingress-browser
+    app.kubernetes.io/version: {{ template "{{.Chart.Name}}.version" . }}
+    app.kubernetes.io/instance: {{.Release.Name | quote }}
+    app: {{ template "{{.Chart.Name}}.name" . }}
+    component: core
+    env: {{ .Values.global.env | quote }}
+spec:
+  backend:
+    serviceName: {{ template "{{.Chart.Name}}.name" . }}-ingress-browser-svc
+    servicePort: {{ .Values.config.port.http }}
+{{ end }}

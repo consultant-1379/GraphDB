@@ -1,0 +1,36 @@
+{{- if .Values.brAgent.enabled  }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ template "{{.Chart.Name}}.name" . }}-bragent
+  labels:
+    app: {{ template "{{.Chart.Name}}.name" . }}
+    app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+    chart: {{ template "{{.Chart.Name}}.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ template "{{.Chart.Name}}.version" . }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    component: bragent
+spec:
+{{- if .Values.services.dns.clusterIP }}
+  clusterIP: {{ .Values.services.dns.clusterIP }}
+{{- end }}
+  ports:
+{{- if (eq (include "{{.Chart.Name}}.restore.state" .) "ongoing") }}
+  - port: 10000
+    protocol: TCP
+    name: grpc
+{{- end }}
+  - name: http
+    port: {{ .Values.config.port.http }}
+    targetPort: {{ .Values.config.port.http }}
+    protocol: TCP
+  - name: bolt
+    port: {{ .Values.config.port.bolt }}
+    targetPort: {{ .Values.config.port.bolt }}
+    protocol: TCP
+  selector:
+    app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    component: bragent
+{{- end }}

@@ -1,0 +1,40 @@
+{{- if .Values.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ template "{{.Chart.Name}}.replica.name" . }}
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+    chart: {{ template "{{.Chart.Name}}.chart" . }}
+    app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+    app.kubernetes.io/version: {{ template "{{.Chart.Name}}.version" . }}
+    app.kubernetes.io/instance: {{.Release.Name | quote }} 
+    app: {{ template "{{.Chart.Name}}.name" . }}
+    component: replica
+    env: {{ .Values.global.env | quote }}
+    
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+  template:
+    metadata:
+      name: {{ template "{{.Chart.Name}}.replica.name" . }}
+      labels:
+        app.kubernetes.io/name: {{ template "{{.Chart.Name}}.name" . }}
+        app.kubernetes.io/version: {{ template "{{.Chart.Name}}.version" . }}
+        app: {{ template "{{.Chart.Name}}.name" . }}
+        app.kubernetes.io/instance: {{.Release.Name | quote }}
+        component: replica
+  minReplicas: {{ .Values.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.controller.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        targetAverageUtilization: {{ .Values.controller.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        targetAverageUtilization: {{ .Values.controller.autoscaling.targetMemoryUtilizationPercentage }}
+{{- end }}

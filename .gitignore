@@ -1,0 +1,19 @@
+output.html
+bur_test_output.html
+testdeploy.log
+*.pyc
+*/__pycache__/*
+bin/
+tmp.*
+*.extracted
+
+# Eclipse files
+.project
+
+# IntelliJ files
+*.iml
+*.idea
+
+# Bob workdir
+.bob
+/eric-data-graph-database-nj/
